@@ -31,6 +31,7 @@
 #include "hw/usb.h"
 #include "hw/baum.h"
 #include "hw/msmouse.h"
+#include "hw/ps2.h"
 #include "qemu-objects.h"
 
 #include <unistd.h>
@@ -608,7 +609,7 @@ static void fd_chr_close(struct CharDriverState *chr)
 }
 
 /* open a character device to a unix fd */
-static CharDriverState *qemu_chr_open_fd(int fd_in, int fd_out)
+CharDriverState *qemu_chr_open_fd(int fd_in, int fd_out)
 {
     CharDriverState *chr;
     FDCharDriver *s;
@@ -664,7 +665,6 @@ static CharDriverState *qemu_chr_open_pipe(QemuOpts *opts)
     }
     return qemu_chr_open_fd(fd_in, fd_out);
 }
-
 
 /* for STDIO, we handle the case where several clients use it
    (nographic mode) */
@@ -2418,6 +2418,9 @@ static const struct {
     { .name = "pipe",      .open = qemu_chr_open_pipe },
     { .name = "pty",       .open = qemu_chr_open_pty },
     { .name = "stdio",     .open = qemu_chr_open_stdio },
+#ifndef TARGET_ARM
+    { .name = "ps2mouse",  .open = qemu_chr_open_ps2mouse },
+#endif
 #endif
 #ifdef CONFIG_BRLAPI
     { .name = "braille",   .open = chr_baum_init },

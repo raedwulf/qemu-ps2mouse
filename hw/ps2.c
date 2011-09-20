@@ -21,15 +21,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include "../qemu-common.h"
+#include "../qemu-char.h"
 #include "hw.h"
 #include "ps2.h"
 #include "console.h"
+#include "sysemu.h"
 
 /* debug PC keyboard */
 //#define DEBUG_KBD
 
 /* debug PC keyboard : only mouse */
-//#define DEBUG_MOUSE
+#define DEBUG_MOUSE
 
 /* Keyboard Commands */
 #define KBD_CMD_SET_LEDS	0xED	/* Set keyboard leds */
@@ -71,6 +74,9 @@
 #define MOUSE_STATUS_SCALE21    0x10
 
 #define PS2_QUEUE_SIZE 256
+
+/* HACK: How else do we reference this? */
+CharDriverState *ps2_mchardev = NULL;
 
 typedef struct {
     uint8_t data[PS2_QUEUE_SIZE];
@@ -370,6 +376,10 @@ void ps2_write_mouse(void *opaque, int val)
 #ifdef DEBUG_MOUSE
     printf("kbd: write mouse 0x%02x\n", val);
 #endif
+    if (ps2_mchardev) {
+        qemu_chr_write(ps2_mchardev, ((uint8_t *)&val), 1);
+        return;
+    }
     switch(s->common.write_cmd) {
     default:
     case -1:
@@ -601,6 +611,33 @@ void *ps2_kbd_init(void (*update_irq)(void *, int), void *update_arg)
     return s;
 }
 
+static int ps2_serio_can_read(void *opaque)
+{
+    PS2MouseState *s = opaque;
+    return 6;
+}
+
+static void ps2_serio_read(void *opaque, const uint8_t *buf, int size)
+{
+    PS2MouseState *s = opaque;
+    int i;
+    for (i = 0; i < size; i++) {
+#ifdef DEBUG_MOUSE
+        printf("ps2_serio_read: 0x%02x\n", buf[i]);
+#endif
+        ps2_queue(&s->common, buf[i]);
+    }
+}
+
+static void ps2_serio_event(void *opaque, int event)
+{
+    PS2MouseState *s = opaque;
+    /* TODO: Do we actually need to do anything here? */
+#ifdef DEBUG_MOUSE
+    printf("ps2_serio_event: %d\n", event);
+#endif
+}
+
 void *ps2_mouse_init(void (*update_irq)(void *, int), void *update_arg)
 {
     PS2MouseState *s = (PS2MouseState *)qemu_mallocz(sizeof(PS2MouseState));
@@ -608,7 +645,39 @@ void *ps2_mouse_init(void (*update_irq)(void *, int), void *update_arg)
     s->common.update_irq = update_irq;
     s->common.update_arg = update_arg;
     vmstate_register(NULL, 0, &vmstate_ps2_mouse, s);
-    qemu_add_mouse_event_handler(ps2_mouse_event, s, 0, "QEMU PS/2 Mouse");
+    /* HACK: To read directly from serio_raw device */
+    if (ps2_mchardev) {
+        qemu_chr_add_handlers(ps2_mchardev, ps2_serio_can_read,
+            ps2_serio_read, ps2_serio_event, s);
+    } else {
+        qemu_add_mouse_event_handler(ps2_mouse_event, s, 0, "QEMU PS/2 Mouse");
+    }
+
     qemu_register_reset(ps2_mouse_reset, s);
     return s;
 }
+
+CharDriverState *qemu_chr_open_ps2mouse(QemuOpts *opts)
+{
+    int fd_in, fd_out;
+    const char *filename = qemu_opt_get(opts, "path");
+
+    if (filename == NULL) {
+        fprintf(stderr, "chardev: pipe: no filename given\n");
+        return NULL;
+    }
+
+    TFR(fd_in = qemu_open(filename, O_RDWR | O_BINARY));
+    TFR(fd_out = qemu_open(filename, O_RDWR | O_BINARY));
+    if (fd_in < 0 || fd_out < 0) {
+	if (fd_in >= 0)
+	    close(fd_in);
+	if (fd_out >= 0)
+	    close(fd_out);
+        TFR(fd_in = fd_out = open(filename, O_RDWR | O_BINARY));
+        if (fd_in < 0)
+            return NULL;
+    }
+    return (ps2_mchardev = qemu_chr_open_fd(fd_in, fd_out));
+}
+

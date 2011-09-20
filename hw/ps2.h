@@ -7,3 +7,5 @@ uint32_t ps2_read_data(void *);
 void ps2_queue(void *, int b);
 void ps2_keyboard_set_translation(void *opaque, int mode);
 void ps2_mouse_fake_event(void *opaque);
+CharDriverState *qemu_chr_open_ps2mouse(QemuOpts *opts);
+extern CharDriverState *ps2_mchardev;

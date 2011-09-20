@@ -1353,6 +1353,7 @@ DEF("chardev", HAS_ARG, QEMU_OPTION_chardev,
 #if defined(__linux__) || defined(__sun__) || defined(__FreeBSD__) \
         || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
     "-chardev tty,id=id,path=path[,mux=on|off]\n"
+    "-chardev ps2mouse,id=id,path=path\n"
 #endif
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__DragonFly__)
     "-chardev parport,id=id,path=path[,mux=on|off]\n"
@@ -1372,6 +1373,7 @@ Backend is one of:
 @option{socket},
 @option{udp},
 @option{msmouse},
+@option{ps2mouse},
 @option{vc},
 @option{file},
 @option{pipe},
@@ -1466,6 +1468,15 @@ If neither is specified the device may use either protocol.
 
 Forward QEMU's emulated msmouse events to the guest. @option{msmouse} does not
 take any options.
+
+@item -chardev ps2mouse ,id=@var{id} ,path=@var{path}
+
+Connect to a local raw character device for the ps2 mouse port.
+
+@option{tty} is only available on Linux, Sun, FreeBSD, NetBSD, OpenBSD and
+DragonFlyBSD hosts.
+
+@option{path} specifies the path to the /dev/serio_raw*. @option{path} is required.
 
 @item -chardev vc ,id=@var{id} [[,width=@var{width}] [,height=@var{height}]] [[,cols=@var{cols}] [,rows=@var{rows}]]
 
